@@ -1,0 +1,921 @@
+
+{% extends "base.html" %}
+
+{% block title %}AI Modules - ProfessorSearch{% endblock %}
+{% block page_title %}AI Modules{% endblock %}
+
+{% block head %}
+<style>
+    .module-form .form-group {
+        margin-bottom: 16px;
+    }
+
+    .module-form label {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 14px;
+        font-weight: 500;
+    }
+
+    .module-form input,
+    .module-form textarea,
+    .module-form select {
+        display: block;
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        font: inherit;
+    }
+
+    .module-form textarea {
+        resize: vertical;
+    }
+
+    .module-form .form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0 16px;
+    }
+
+    .module-form .full-width {
+        grid-column: 1 / -1;
+    }
+
+    .module-form .prompt-input {
+        min-height: 180px;
+    }
+
+    .module-form .description-input {
+        min-height: 70px;
+    }
+
+    .module-checkboxes {
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        margin: 14px 0 20px;
+    }
+
+    .module-checkboxes label {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        margin: 0;
+        cursor: pointer;
+    }
+
+    .module-checkboxes input {
+        width: auto;
+        margin: 0;
+    }
+
+    .module-btn {
+        padding: 8px 14px;
+        border: none;
+        border-radius: 6px;
+        font-size: 13px;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+
+    .module-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .btn-primary {
+        background: #2563eb;
+        color: #fff;
+    }
+
+    .btn-success {
+        background: #16a34a;
+        color: #fff;
+    }
+
+    .btn-secondary {
+        background: #e5e7eb;
+        color: #374151;
+    }
+
+    .module-search {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin: 18px 0 22px;
+        flex-wrap: wrap;
+    }
+
+    .module-search input {
+        width: 420px;
+        max-width: 100%;
+        padding: 11px 14px;
+        border: 1px solid #d1d5db;
+        border-radius: 7px;
+        font-size: 14px;
+    }
+
+    #searchCount {
+        color: #6b7280;
+        font-size: 13px;
+    }
+
+    .module-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+    }
+
+    .module-table th,
+    .module-table td {
+        padding: 12px;
+        text-align: left;
+        vertical-align: top;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .module-table th {
+        background: #f9fafb;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .module-table th.sortable {
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .module-table th.sortable:hover {
+        background: #f1f5f9;
+    }
+
+    .module-table .view-field {
+        overflow-wrap: anywhere;
+    }
+
+    .module-table .edit-field {
+        display: none;
+        width: 100%;
+        min-width: 100px;
+        padding: 8px;
+        border: 1px solid #93c5fd;
+        border-radius: 5px;
+        font: inherit;
+        font-size: 13px;
+    }
+
+    .module-table textarea.edit-field {
+        min-height: 70px;
+        resize: vertical;
+    }
+
+    .module-table .checkbox-edit {
+        width: 18px;
+        min-width: 18px;
+        height: 18px;
+    }
+
+    .module-table tr.editing {
+        background: #eff6ff;
+    }
+
+    .module-table .actions {
+        min-width: 185px;
+        white-space: nowrap;
+    }
+
+    .module-table .actions button {
+        margin-right: 5px;
+    }
+
+    .module-status {
+        margin-top: 7px;
+        font-size: 12px;
+        white-space: normal;
+    }
+
+    .module-message {
+        padding: 12px 16px;
+        margin-bottom: 18px;
+        border-radius: 6px;
+        font-size: 14px;
+    }
+
+    .module-message.success {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .module-message.error {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .module-badge {
+        display: inline-block;
+        padding: 4px 9px;
+        border-radius: 20px;
+        background: #e5e7eb;
+        color: #374151;
+        font-size: 12px;
+        white-space: nowrap;
+    }
+
+    .module-badge.enabled {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .module-badge.core {
+        background: #dbeafe;
+        color: #1d4ed8;
+    }
+
+    .prompt-preview {
+        display: block;
+        max-width: 300px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .prompt-editor {
+        min-width: 300px !important;
+        min-height: 180px !important;
+    }
+
+    .description-editor {
+        min-width: 180px !important;
+    }
+
+    .no-results {
+        padding: 24px;
+        text-align: center;
+        color: #6b7280;
+    }
+
+    @media (max-width: 700px) {
+        .module-form .form-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .module-form .full-width {
+            grid-column: auto;
+        }
+    }
+</style>
+{% endblock %}
+
+
+{% block content %}
+
+<!-- Add Module -->
+<div class="card">
+    <h3>Add Module</h3>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+            <div class="module-message {{ category }}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endwith %}
+
+    <form method="POST" class="module-form">
+
+        <div class="form-grid">
+
+            <div class="form-group">
+                <label for="module_id">Module ID *</label>
+                <input
+                    type="text"
+                    id="module_id"
+                    name="module_id"
+                    maxlength="100"
+                    placeholder="resume"
+                    required
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="module_name">Module Name *</label>
+                <input
+                    type="text"
+                    id="module_name"
+                    name="module_name"
+                    maxlength="200"
+                    placeholder="CV/Resume"
+                    required
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="sort_order">Sort Order</label>
+                <input
+                    type="number"
+                    id="sort_order"
+                    name="sort_order"
+                    value="100"
+                    required
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="output_type">Output Type</label>
+                <select id="output_type" name="output_type">
+                    <option value="json">JSON</option>
+                    <option value="text">Text</option>
+                </select>
+            </div>
+
+            <div class="form-group full-width">
+                <label for="description">Description</label>
+                <textarea
+                    id="description"
+                    name="description"
+                    class="description-input"
+                    rows="2"
+                ></textarea>
+            </div>
+
+            <div class="form-group full-width">
+                <label for="instructions">Instructions / Prompt *</label>
+                <textarea
+                    id="instructions"
+                    name="instructions"
+                    class="prompt-input"
+                    rows="9"
+                    required
+                ></textarea>
+            </div>
+
+            <div class="form-group full-width">
+                <div class="module-checkboxes">
+                    <label>
+                        <input
+                            type="checkbox"
+                            name="enabled"
+                            checked
+                        >
+                        Enabled
+                    </label>
+
+                    <label>
+                        <input
+                            type="checkbox"
+                            name="is_core"
+                        >
+                        Core Module
+                    </label>
+                </div>
+            </div>
+
+        </div>
+
+        <button type="submit" class="module-btn btn-primary">
+            Add Module
+        </button>
+
+    </form>
+</div>
+
+
+<!-- Module List -->
+<div class="card" style="margin-top: 24px;">
+
+    <h3>Module List</h3>
+
+    <div class="module-search">
+        <input
+            type="search"
+            id="moduleSearch"
+            placeholder="Search Module ID or Name..."
+            oninput="searchModules()"
+            autocomplete="off"
+            aria-label="Search modules"
+        >
+
+        <span id="searchCount"></span>
+    </div>
+
+    <div style="overflow-x: auto;">
+
+        <table class="module-table" id="moduleTable">
+
+            <thead>
+                <tr>
+                    <th class="sortable" onclick="sortModules('id')">
+                        Module ID
+                    </th>
+                    <th class="sortable" onclick="sortModules('name')">
+                        Module Name
+                    </th>
+                    <th>Description</th>
+                    <th>Instructions / Prompt</th>
+                    <th>Output Type</th>
+                    <th class="sortable" onclick="sortModules('order')">
+                        Sort Order
+                    </th>
+                    <th>Enabled</th>
+                    <th>Core</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+
+            <tbody id="moduleTableBody">
+
+                {% for module in modules %}
+
+                <tr
+                    id="module-{{ loop.index }}"
+                    class="module-row"
+                    data-module-id="{{ module.module_id }}"
+                >
+
+                    <!-- Module ID -->
+                    <td>
+                        <span class="view-field" data-view="module_id">
+                            {{ module.module_id }}
+                        </span>
+                    </td>
+
+                    <!-- Module Name -->
+                    <td>
+                        <span class="view-field" data-view="module_name">
+                            {{ module.module_name }}
+                        </span>
+
+                        <input
+                            class="edit-field"
+                            name="module_name"
+                            type="text"
+                            value="{{ module.module_name }}"
+                            maxlength="200"
+                            required
+                        >
+                    </td>
+
+                    <!-- Description -->
+                    <td>
+                        <span class="view-field" data-view="description">
+                            {{ module.description or '-' }}
+                        </span>
+
+                        <textarea
+                            class="edit-field description-editor"
+                            name="description"
+                            rows="4"
+                        >{{ module.description or '' }}</textarea>
+                    </td>
+
+                    <!-- Instructions -->
+                    <td>
+                        <span
+                            class="view-field prompt-preview"
+                            data-view="instructions"
+                            title="{{ module.instructions }}"
+                        >{{ module.instructions }}</span>
+
+                        <textarea
+                            class="edit-field prompt-editor"
+                            name="instructions"
+                            rows="10"
+                            required
+                        >{{ module.instructions }}</textarea>
+                    </td>
+
+                    <!-- Output Type -->
+                    <td>
+                        <span class="view-field" data-view="output_type">
+                            {{ (module.output_type or 'json')|upper }}
+                        </span>
+
+                        <select
+                            class="edit-field"
+                            name="output_type"
+                        >
+                            <option
+                                value="json"
+                                {% if module.output_type == 'json' %}selected{% endif %}
+                            >JSON</option>
+
+                            <option
+                                value="text"
+                                {% if module.output_type == 'text' %}selected{% endif %}
+                            >Text</option>
+                        </select>
+                    </td>
+
+                    <!-- Sort Order -->
+                    <td>
+                        <span class="view-field" data-view="sort_order">
+                            {{ module.sort_order }}
+                        </span>
+
+                        <input
+                            class="edit-field"
+                            name="sort_order"
+                            type="number"
+                            value="{{ module.sort_order }}"
+                            required
+                        >
+                    </td>
+
+                    <!-- Enabled -->
+                    <td>
+                        <span
+                            class="view-field module-badge {% if module.enabled %}enabled{% endif %}"
+                            data-view="enabled"
+                        >
+                            {{ 'Enabled' if module.enabled else 'Disabled' }}
+                        </span>
+
+                        <input
+                            class="edit-field checkbox-edit"
+                            name="enabled"
+                            type="checkbox"
+                            {% if module.enabled %}checked{% endif %}
+                        >
+                    </td>
+
+                    <!-- Core -->
+                    <td>
+                        <span
+                            class="view-field module-badge {% if module.is_core %}core{% endif %}"
+                            data-view="is_core"
+                        >
+                            {{ 'Core' if module.is_core else 'No' }}
+                        </span>
+
+                        <input
+                            class="edit-field checkbox-edit"
+                            name="is_core"
+                            type="checkbox"
+                            {% if module.is_core %}checked{% endif %}
+                        >
+                    </td>
+
+                    <!-- Actions -->
+                    <td class="actions">
+
+                        <button
+                            type="button"
+                            class="module-btn btn-secondary modify-btn"
+                            onclick="toggleEdit(this, true)"
+                        >
+                            Modify
+                        </button>
+
+                        <button
+                            type="button"
+                            class="module-btn btn-success save-btn"
+                            style="display: none;"
+                            onclick="saveModule(this)"
+                        >
+                            Save
+                        </button>
+
+                        <button
+                            type="button"
+                            class="module-btn btn-secondary cancel-btn"
+                            style="display: none;"
+                            onclick="toggleEdit(this, false)"
+                        >
+                            Cancel
+                        </button>
+
+                        <div class="module-status" role="status"></div>
+
+                    </td>
+
+                </tr>
+
+                {% endfor %}
+
+                <tr id="noSearchResults" style="display: none;">
+                    <td colspan="9" class="no-results">
+                        No matching modules found.
+                    </td>
+                </tr>
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+</div>
+
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+
+const moduleSortState = {
+    field: null,
+    ascending: true
+};
+
+
+function getModuleRow(button) {
+    return button.closest(".module-row");
+}
+
+
+function toggleEdit(button, editing) {
+    const row = getModuleRow(button);
+
+    if (!row) return;
+
+    const fields = row.querySelectorAll(".edit-field");
+
+    if (editing) {
+        fields.forEach(field => {
+            field.dataset.savedValue =
+                field.type === "checkbox"
+                    ? String(field.checked)
+                    : field.value;
+        });
+    } else {
+        fields.forEach(field => {
+            if (field.type === "checkbox") {
+                field.checked = field.dataset.savedValue === "true";
+            } else if (field.dataset.savedValue !== undefined) {
+                field.value = field.dataset.savedValue;
+            }
+        });
+    }
+
+    row.classList.toggle("editing", editing);
+
+    row.querySelectorAll(".view-field").forEach(el => {
+        el.style.display = editing ? "none" : "";
+    });
+
+    fields.forEach(field => {
+        field.style.display = editing
+            ? (field.type === "checkbox" ? "inline-block" : "block")
+            : "none";
+    });
+
+    row.querySelector(".modify-btn").style.display =
+        editing ? "none" : "inline-block";
+
+    row.querySelector(".save-btn").style.display =
+        editing ? "inline-block" : "none";
+
+    row.querySelector(".cancel-btn").style.display =
+        editing ? "inline-block" : "none";
+
+    row.querySelector(".module-status").textContent = "";
+}
+
+
+async function saveModule(button) {
+    const row = getModuleRow(button);
+    const moduleId = row.dataset.moduleId;
+
+    const get = name =>
+        row.querySelector(`[name="${name}"]`);
+
+    const status = row.querySelector(".module-status");
+
+    const sortOrderText = get("sort_order").value.trim();
+    const sortOrder = Number(sortOrderText);
+
+    const payload = {
+        module_name: get("module_name").value.trim(),
+        description: get("description").value,
+        instructions: get("instructions").value.trim(),
+        output_type: get("output_type").value,
+        sort_order: sortOrder,
+        enabled: get("enabled").checked,
+        is_core: get("is_core").checked
+    };
+
+    if (!payload.module_name) {
+        status.style.color = "#dc2626";
+        status.textContent = "Module Name is required.";
+        return;
+    }
+
+    if (!payload.instructions) {
+        status.style.color = "#dc2626";
+        status.textContent = "Instructions are required.";
+        return;
+    }
+
+    if (
+        sortOrderText === "" ||
+        !Number.isSafeInteger(sortOrder)
+    ) {
+        status.style.color = "#dc2626";
+        status.textContent = "Sort Order must be an integer.";
+        return;
+    }
+
+    const saveBtn = row.querySelector(".save-btn");
+    const cancelBtn = row.querySelector(".cancel-btn");
+
+    saveBtn.disabled = true;
+    cancelBtn.disabled = true;
+    saveBtn.textContent = "Saving...";
+    status.textContent = "";
+
+    try {
+        const response = await fetch(
+            `/modules/${encodeURIComponent(moduleId)}/update`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
+                },
+                body: JSON.stringify(payload)
+            }
+        );
+
+        const contentType =
+            response.headers.get("content-type") || "";
+
+        if (!contentType.includes("application/json")) {
+            throw new Error("Server did not return JSON.");
+        }
+
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+            throw new Error(
+                result.message || "Failed to save module."
+            );
+        }
+
+        // Update displayed values
+        row.querySelector('[data-view="module_name"]').textContent =
+            payload.module_name;
+
+        row.querySelector('[data-view="description"]').textContent =
+            payload.description || "-";
+
+        const promptView =
+            row.querySelector('[data-view="instructions"]');
+
+        promptView.textContent = payload.instructions;
+        promptView.title = payload.instructions;
+
+        row.querySelector('[data-view="output_type"]').textContent =
+            payload.output_type.toUpperCase();
+
+        row.querySelector('[data-view="sort_order"]').textContent =
+            payload.sort_order;
+
+        const enabledView =
+            row.querySelector('[data-view="enabled"]');
+
+        enabledView.textContent =
+            payload.enabled ? "Enabled" : "Disabled";
+
+        enabledView.classList.toggle("enabled", payload.enabled);
+
+        const coreView =
+            row.querySelector('[data-view="is_core"]');
+
+        coreView.textContent =
+            payload.is_core ? "Core" : "No";
+
+        coreView.classList.toggle("core", payload.is_core);
+
+        // Update saved values
+        row.querySelectorAll(".edit-field").forEach(field => {
+            field.dataset.savedValue =
+                field.type === "checkbox"
+                    ? String(field.checked)
+                    : field.value;
+        });
+
+        toggleEdit(saveBtn, false);
+
+        status.style.color = "#16a34a";
+        status.textContent = "Saved successfully.";
+
+        searchModules();
+
+    } catch (error) {
+        status.style.color = "#dc2626";
+        status.textContent = "Save failed: " + error.message;
+
+    } finally {
+        saveBtn.disabled = false;
+        cancelBtn.disabled = false;
+        saveBtn.textContent = "Save";
+    }
+}
+
+
+function searchModules() {
+    const keyword = document
+        .getElementById("moduleSearch")
+        .value
+        .trim()
+        .toLowerCase();
+
+    const rows = document.querySelectorAll(".module-row");
+
+    let visibleCount = 0;
+
+    rows.forEach(row => {
+        const moduleId = row
+            .querySelector('[data-view="module_id"]')
+            .textContent
+            .trim()
+            .toLowerCase();
+
+        const moduleName = row
+            .querySelector('[data-view="module_name"]')
+            .textContent
+            .trim()
+            .toLowerCase();
+
+        const matched =
+            moduleId.includes(keyword) ||
+            moduleName.includes(keyword);
+
+        row.style.display = matched ? "" : "none";
+
+        if (matched) visibleCount++;
+    });
+
+    document.getElementById("searchCount").textContent =
+        `${visibleCount} module(s) found`;
+
+    document.getElementById("noSearchResults").style.display =
+        visibleCount === 0 ? "" : "none";
+}
+
+
+function sortModules(field) {
+    if (moduleSortState.field === field) {
+        moduleSortState.ascending = !moduleSortState.ascending;
+    } else {
+        moduleSortState.field = field;
+        moduleSortState.ascending = true;
+    }
+
+    const tbody = document.getElementById("moduleTableBody");
+    const rows = Array.from(
+        tbody.querySelectorAll(".module-row")
+    );
+
+    function getValue(row) {
+        if (field === "id") {
+            return row.querySelector('[data-view="module_id"]')
+                .textContent.trim();
+        }
+
+        if (field === "name") {
+            return row.querySelector('[data-view="module_name"]')
+                .textContent.trim();
+        }
+
+        return Number(
+            row.querySelector('[data-view="sort_order"]')
+                .textContent.trim()
+        );
+    }
+
+    rows.sort((a, b) => {
+        const aValue = getValue(a);
+        const bValue = getValue(b);
+
+        let result;
+
+        if (field === "order") {
+            result = aValue - bValue;
+        } else {
+            result = String(aValue).localeCompare(
+                String(bValue),
+                undefined,
+                {
+                    numeric: true,
+                    sensitivity: "base"
+                }
+            );
+        }
+
+        return moduleSortState.ascending
+            ? result
+            : -result;
+    });
+
+    rows.forEach(row => tbody.appendChild(row));
+}
+
+
+document.addEventListener("DOMContentLoaded", () => {
+    searchModules();
+});
+
+</script>
+{% endblock %}

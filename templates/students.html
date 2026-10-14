@@ -1,0 +1,609 @@
+
+{% extends "base.html" %}
+
+{% block title %}Students - ProfessorSearch{% endblock %}
+{% block page_title %}Students{% endblock %}
+
+{% block head %}
+<style>
+    .student-form .form-group {
+        margin-bottom: 16px;
+    }
+
+    .student-form label {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 14px;
+        font-weight: 500;
+    }
+
+    .student-form input,
+    .student-form textarea {
+        display: block;
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        font: inherit;
+    }
+
+    .student-form input {
+        max-width: 350px;
+    }
+
+    .student-form textarea {
+        max-width: 1200px;
+        min-height: 160px;
+        resize: vertical;
+    }
+
+    .student-btn {
+        padding: 8px 14px;
+        border: none;
+        border-radius: 6px;
+        font-size: 13px;
+        cursor: pointer;
+    }
+
+    .btn-primary {
+        background: #2563eb;
+        color: white;
+    }
+
+    .btn-secondary {
+        background: #e5e7eb;
+        color: #374151;
+    }
+
+    .btn-success {
+        background: #16a34a;
+        color: white;
+    }
+
+    .student-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .student-search {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin: 18px 0 22px;
+        flex-wrap: wrap;
+    }
+
+    .student-search input {
+        width: 420px;
+        max-width: 100%;
+        padding: 11px 14px;
+        border: 1px solid #d1d5db;
+        border-radius: 7px;
+        font-size: 14px;
+    }
+
+    .student-search input:focus {
+        outline: none;
+        border-color: #2563eb;
+    }
+
+    #searchCount {
+        color: #6b7280;
+        font-size: 13px;
+    }
+
+    .student-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+    }
+
+    .student-table th,
+    .student-table td {
+        padding: 12px;
+        text-align: left;
+        vertical-align: top;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .student-table th {
+        background: #f9fafb;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .student-table input,
+    .student-table textarea {
+        width: 100%;
+        min-width: 120px;
+        padding: 8px;
+        border: 1px solid #93c5fd;
+        border-radius: 5px;
+        font: inherit;
+    }
+
+    .student-table textarea {
+        min-width: 220px;
+        min-height: 90px;
+        resize: vertical;
+    }
+
+    .student-table tr.editing {
+        background: #eff6ff;
+    }
+
+    .student-table .actions {
+        min-width: 175px;
+        white-space: nowrap;
+    }
+
+    .student-table .actions button {
+        margin-right: 5px;
+    }
+
+    .student-table .notes-view {
+        display: block;
+        max-width: 300px;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+    }
+
+    .edit-field {
+        display: none;
+    }
+
+    .message {
+        padding: 12px 16px;
+        margin-bottom: 18px;
+        border-radius: 6px;
+        font-size: 14px;
+    }
+
+    .message.success {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .message.error {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .save-status {
+        margin-top: 6px;
+        font-size: 12px;
+        white-space: normal;
+    }
+
+    .no-results {
+        padding: 24px;
+        text-align: center;
+        color: #6b7280;
+    }
+</style>
+{% endblock %}
+
+
+{% block content %}
+
+<!-- Add Student -->
+<div class="card">
+    <h3>Add Student</h3>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+            <div class="message {{ category }}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endwith %}
+
+    <form method="POST" class="student-form">
+
+        <div class="form-group">
+            <label for="full_name">Full Name *</label>
+            <input
+                type="text"
+                id="full_name"
+                name="full_name"
+                maxlength="200"
+                required
+            >
+        </div>
+
+        <div class="form-group">
+            <label for="email">Email</label>
+            <input
+                type="email"
+                id="email"
+                name="email"
+                maxlength="255"
+            >
+        </div>
+
+        <div class="form-group">
+            <label for="phone">Phone</label>
+            <input
+                type="text"
+                id="phone"
+                name="phone"
+                maxlength="30"
+            >
+        </div>
+
+        <div class="form-group">
+            <label for="wechat_id">WeChat ID</label>
+            <input
+                type="text"
+                id="wechat_id"
+                name="wechat_id"
+                maxlength="100"
+            >
+        </div>
+
+        <div class="form-group">
+            <label for="notes">Notes</label>
+            <textarea
+                id="notes"
+                name="notes"
+                rows="6"
+            ></textarea>
+        </div>
+
+        <button type="submit" class="student-btn btn-primary">
+            Add Student
+        </button>
+
+    </form>
+</div>
+
+
+<!-- Student List -->
+<div class="card" style="margin-top: 24px;">
+
+    <h3>Student List</h3>
+
+    <!-- Search -->
+    <div class="student-search">
+        <input
+            type="search"
+            id="studentSearch"
+            placeholder="Search ID, Name, Email, Phone, WeChat ID..."
+            oninput="searchStudents()"
+            autocomplete="off"
+            aria-label="Search students"
+        >
+
+        <span id="searchCount"></span>
+    </div>
+
+    <div style="overflow-x: auto;">
+
+        <table class="student-table">
+
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Full Name</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th>WeChat ID</th>
+                    <th>Notes</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+
+            <tbody>
+
+                {% for student in students %}
+
+                <tr id="student-{{ student.student_id }}"
+                    class="student-row">
+
+                    <td>{{ student.student_id }}</td>
+
+                    <!-- Name -->
+                    <td>
+                        <span class="view-field">
+                            {{ student.full_name }}
+                        </span>
+
+                        <input
+                            class="edit-field"
+                            type="text"
+                            name="full_name"
+                            value="{{ student.full_name }}"
+                            maxlength="200"
+                            required
+                        >
+                    </td>
+
+                    <!-- Email -->
+                    <td>
+                        <span class="view-field">
+                            {{ student.email or '-' }}
+                        </span>
+
+                        <input
+                            class="edit-field"
+                            type="email"
+                            name="email"
+                            value="{{ student.email or '' }}"
+                            maxlength="255"
+                        >
+                    </td>
+
+                    <!-- Phone -->
+                    <td>
+                        <span class="view-field">
+                            {{ student.phone or '-' }}
+                        </span>
+
+                        <input
+                            class="edit-field"
+                            type="text"
+                            name="phone"
+                            value="{{ student.phone or '' }}"
+                            maxlength="30"
+                        >
+                    </td>
+
+                    <!-- WeChat -->
+                    <td>
+                        <span class="view-field">
+                            {{ student.wechat_id or '-' }}
+                        </span>
+
+                        <input
+                            class="edit-field"
+                            type="text"
+                            name="wechat_id"
+                            value="{{ student.wechat_id or '' }}"
+                            maxlength="100"
+                        >
+                    </td>
+
+                    <!-- Notes -->
+                    <td>
+                        <span class="view-field notes-view">
+                            {{ student.notes or '-' }}
+                        </span>
+
+                        <textarea
+                            class="edit-field"
+                            name="notes"
+                            rows="4"
+                        >{{ student.notes or '' }}</textarea>
+                    </td>
+
+                    <!-- Created -->
+                    <td style="white-space: nowrap;">
+                        {{ student.created_at }}
+                    </td>
+
+                    <!-- Actions -->
+                    <td class="actions">
+
+                        <button
+                            type="button"
+                            class="student-btn btn-secondary modify-btn"
+                            onclick="toggleEdit({{ student.student_id }}, true)"
+                        >
+                            Modify
+                        </button>
+
+                        <button
+                            type="button"
+                            class="student-btn btn-success save-btn"
+                            style="display: none;"
+                            onclick="saveStudent({{ student.student_id }})"
+                        >
+                            Save
+                        </button>
+
+                        <button
+                            type="button"
+                            class="student-btn btn-secondary cancel-btn"
+                            style="display: none;"
+                            onclick="toggleEdit({{ student.student_id }}, false)"
+                        >
+                            Cancel
+                        </button>
+
+                        <div class="save-status" role="status"></div>
+
+                    </td>
+                </tr>
+
+                {% endfor %}
+
+                <tr id="noSearchResults" style="display: none;">
+                    <td colspan="8" class="no-results">
+                        No matching students found.
+                    </td>
+                </tr>
+
+            </tbody>
+        </table>
+
+    </div>
+</div>
+
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+
+function toggleEdit(studentId, editing) {
+    const row = document.getElementById(`student-${studentId}`);
+    if (!row) return;
+
+    if (editing) {
+        row.querySelectorAll(".edit-field").forEach(field => {
+            field.dataset.savedValue = field.value;
+        });
+    } else {
+        row.querySelectorAll(".edit-field").forEach(field => {
+            field.value = field.dataset.savedValue ?? field.defaultValue;
+        });
+    }
+
+    row.classList.toggle("editing", editing);
+
+    row.querySelectorAll(".view-field").forEach(el => {
+        el.style.display = editing ? "none" : "";
+    });
+
+    row.querySelectorAll(".edit-field").forEach(el => {
+        el.style.display = editing ? "block" : "none";
+    });
+
+    row.querySelector(".modify-btn").style.display =
+        editing ? "none" : "inline-block";
+
+    row.querySelector(".save-btn").style.display =
+        editing ? "inline-block" : "none";
+
+    row.querySelector(".cancel-btn").style.display =
+        editing ? "inline-block" : "none";
+
+    row.querySelector(".save-status").textContent = "";
+}
+
+
+async function saveStudent(studentId) {
+    const row = document.getElementById(`student-${studentId}`);
+    if (!row) return;
+
+    const fields = row.querySelectorAll(".edit-field");
+    const values = {};
+    const formData = new FormData();
+
+    fields.forEach(field => {
+        values[field.name] = field.value;
+        formData.append(field.name, field.value);
+    });
+
+    if (!values.full_name.trim()) {
+        alert("Full Name is required.");
+        return;
+    }
+
+    const emailField = row.querySelector('[name="email"]');
+    if (!emailField.checkValidity()) {
+        emailField.reportValidity();
+        return;
+    }
+
+    const saveBtn = row.querySelector(".save-btn");
+    const cancelBtn = row.querySelector(".cancel-btn");
+    const status = row.querySelector(".save-status");
+
+    saveBtn.disabled = true;
+    cancelBtn.disabled = true;
+    saveBtn.textContent = "Saving...";
+    status.textContent = "";
+
+    try {
+        const response = await fetch(
+            `/students/${studentId}/update`,
+            {
+                method: "POST",
+                body: formData,
+                headers: {
+                    "Accept": "application/json"
+                }
+            }
+        );
+
+        const contentType = response.headers.get("content-type") || "";
+
+        if (!contentType.includes("application/json")) {
+            throw new Error("Server did not return JSON.");
+        }
+
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+            throw new Error(result.message || "Save failed.");
+        }
+
+        fields.forEach(field => {
+            field.dataset.savedValue = field.value;
+
+            const cell = field.closest("td");
+            const view = cell.querySelector(".view-field");
+
+            if (view) {
+                view.textContent = field.value || "-";
+            }
+        });
+
+        toggleEdit(studentId, false);
+
+        status.style.color = "#16a34a";
+        status.textContent = "Saved successfully.";
+
+        // Refresh search results after saving
+        searchStudents();
+
+    } catch (error) {
+        status.style.color = "#dc2626";
+        status.textContent = "Save failed: " + error.message;
+    } finally {
+        saveBtn.disabled = false;
+        cancelBtn.disabled = false;
+        saveBtn.textContent = "Save";
+    }
+}
+
+
+function searchStudents() {
+    const keyword = document
+        .getElementById("studentSearch")
+        .value
+        .trim()
+        .toLowerCase();
+
+    const rows = document.querySelectorAll(".student-row");
+
+    let visibleCount = 0;
+
+    rows.forEach(row => {
+        // Search only ID, Name, Email, Phone, WeChat ID
+        const columns = [0, 1, 2, 3, 4];
+
+        const searchText = columns.map(index => {
+            const cell = row.cells[index];
+            const view = cell.querySelector(".view-field");
+
+            return view
+                ? view.textContent.trim().toLowerCase()
+                : cell.textContent.trim().toLowerCase();
+        }).join(" ");
+
+        const matched = searchText.includes(keyword);
+
+        row.style.display = matched ? "" : "none";
+
+        if (matched) {
+            visibleCount++;
+        }
+    });
+
+    document.getElementById("searchCount").textContent =
+        `${visibleCount} student(s) found`;
+
+    document.getElementById("noSearchResults").style.display =
+        visibleCount === 0 ? "" : "none";
+}
+
+
+document.addEventListener("DOMContentLoaded", () => {
+    searchStudents();
+});
+
+</script>
+{% endblock %}

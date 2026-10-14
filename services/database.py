@@ -1,20 +1,18 @@
 
-import os
-
-from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL
 from sqlalchemy.orm import sessionmaker
 
-load_dotenv()
+from config import Config
+
 
 DATABASE_URL = URL.create(
     drivername="mysql+pymysql",
-    username=os.environ["DB_USER"],
-    password=os.environ["DB_PASSWORD"],
-    host=os.getenv("DB_HOST", "127.0.0.1"),
-    port=int(os.getenv("DB_PORT", "3306")),
-    database=os.getenv("DB_NAME", "professorsearch"),
+    username=Config.DB_USER,
+    password=Config.DB_PASSWORD,
+    host=Config.DB_HOST,
+    port=Config.DB_PORT,
+    database=Config.DB_NAME,
     query={"charset": "utf8mb4"},
 )
 
@@ -28,6 +26,7 @@ SessionLocal = sessionmaker(
     bind=engine,
     expire_on_commit=False,
 )
+
 
 def test_connection():
     with engine.connect() as conn:

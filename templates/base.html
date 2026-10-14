@@ -1,0 +1,56 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>{% block title %}ProfessorSearch{% endblock %}</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='css/style.css') }}">
+
+    {% block head %}{% endblock %}
+</head>
+
+<body>
+    <div class="app-layout">
+
+        <aside class="sidebar">
+            <div class="sidebar-brand">ProfessorSearch</div>
+
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('index') }}">Dashboard</a>
+                <a href="/students">Students</a>
+                <a href="/modules">AI Modules</a>
+                <a href="/analysis">Analysis</a>
+                <a href="/professors">Professor Search</a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <span>{{ current_user.username }}</span>
+
+                <form method="POST"
+                      action="{{ url_for('auth.logout') }}">
+                    <button type="submit" class="logout-btn">
+                        Logout
+                    </button>
+                </form>
+            </div>
+        </aside>
+
+        <div class="main-layout">
+            <header class="topbar">
+                <h2>{% block page_title %}Dashboard{% endblock %}</h2>
+            </header>
+
+            <main class="page-content">
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+
+    </div>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>
