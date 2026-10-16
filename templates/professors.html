@@ -1,0 +1,380 @@
+{% extends 'base.html' %}
+{% block title %}Professor Search - ProfessorSearch{% endblock %}
+{% block page_title %}Professor Search{% endblock %}
+{% block content %}
+<style>
+.ps-panel{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;margin-bottom:20px}
+.ps-panel h3{margin:0 0 16px;font-size:18px;color:#111827}
+.ps-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.ps-field{display:flex;flex-direction:column;gap:7px;min-width:0}
+.ps-field label{font-size:14px;font-weight:600;color:#374151}
+.ps-input{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #d1d5db;border-radius:7px;background:#fff;color:#111827;font:inherit}
+.ps-input:focus{outline:2px solid #bfdbfe;border-color:#2563eb}
+.ps-hint{font-size:12px;color:#6b7280}
+.ps-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.ps-check{display:flex;gap:9px;align-items:center;font-size:14px;color:#374151}
+.ps-button{border:0;border-radius:7px;background:#2563eb;color:#fff;padding:11px 20px;font-size:14px;cursor:pointer}
+.ps-error{color:#991b1b;background:#fef2f2;padding:12px;border-radius:7px;margin-bottom:12px}
+.ps-note{font-size:13px;color:#6b7280;margin-top:12px}
+.ps-button:disabled{opacity:.5;cursor:not-allowed}.ps-strategy-list{width:100%;min-height:80px}.ps-profile-section{margin:12px 0}.ps-profile-section strong{display:block;margin-bottom:5px}.ps-preview{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px}
+@media(max-width:760px){.ps-grid{grid-template-columns:1fr}.ps-panel{padding:16px}}
+
+.ps-profile-editor{display:grid;gap:12px;margin-top:12px}
+.ps-edit-field{border:1px solid #e2e8f0;border-radius:8px;padding:12px;background:#fff;min-width:0}
+.ps-edit-field>label{display:block;font-weight:600;margin-bottom:7px;overflow-wrap:anywhere}
+.ps-edit-field>input,.ps-edit-field>textarea,.ps-edit-field>select{width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:6px;padding:9px;font:inherit}
+.ps-edit-field>textarea{min-height:75px;resize:vertical}
+.ps-edit-field .ps-edit-field{margin-top:9px;background:#fafafa}
+.ps-array-item{border-left:3px solid #bfdbfe;padding-left:9px;margin:10px 0}
+</style>
+<div class="ps-panel">
+  <h3>Search Configuration</h3>
+  {% for error in errors %}<div class="ps-error" role="alert">{{ error }}</div>{% endfor %}
+  <form id="professorSearchForm">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="ps-grid">
+      <div class="ps-field">
+        <label for="student_id">Student *</label>
+        <select class="ps-input" id="student_id" name="student_id" required>
+          <option value="">Select a student...</option>
+          {% for s in students %}<option value="{{ s.student_id }}" {% if form.student_id|string == s.student_id|string %}selected{% endif %}>{{ s.full_name }} (ID: {{ s.student_id }})</option>{% endfor %}
+        </select>
+        <span class="ps-hint">Student Profile must be generated before searching.</span>
+      </div>
+      <div class="ps-field">
+        <label for="professor_count">Number of Professors *</label>
+        <input class="ps-input" type="number" min="1" max="100" id="professor_count" name="professor_count" value="{{ form.professor_count }}" required>
+      </div>
+      <div class="ps-field">
+        <label for="location">Preferred Location</label>
+        <input class="ps-input" id="location" name="location" placeholder="e.g. United States, Canada" value="{{ form.location }}">
+      </div>
+      <div class="ps-field">
+        <label for="universities">Preferred Universities</label>
+        <textarea class="ps-input" id="universities" name="universities" rows="3" placeholder="One university per line">{{ form.universities }}</textarea>
+      </div>
+    </div>
+    <div class="ps-panel" style="margin-top:20px;background:#f8fafc" id="profilePreviewPanel">
+      <h3>Student Profile — View / Modify</h3>
+      <p class="ps-hint" id="profileStatus">Select a student to load their existing AI Student Profile.</p>
+      <div id="profilePreview" hidden>
+        <div class="ps-row" style="gap:10px;margin:12px 0;align-items:center">
+          <button class="ps-button" type="button" id="profileRawButton">Raw JSON</button>
+          <button class="ps-button" type="button" id="profileResetButton">Discard Changes</button>
+          <button class="ps-button" type="button" id="profileSaveButton">Save Profile</button>
+          <span id="profileSaveStatus" class="ps-hint" role="status"></span>
+        </div>
+        <div id="profileFields" class="ps-profile-editor"></div>
+        <textarea id="profileRaw" class="ps-input" style="width:100%;min-height:420px;font-family:monospace" hidden></textarea>
+      </div>
+    </div>
+    <div class="ps-panel" style="margin-top:20px;background:#f8fafc">
+      <div class="ps-row" style="justify-content:space-between">
+        <h3 style="margin:0">AI Search Strategy</h3>
+        <button class="ps-button" type="button" id="generateStrategyButton" disabled>Generate Strategy</button>
+        <button class="ps-button" type="button" id="saveStrategyButton" disabled>Save Strategy</button>
+      </div>
+      <p class="ps-hint" id="draftStatus" role="status">Select a student to load a saved strategy.</p>
+      <p class="ps-hint" id="strategyStatus">Generate research directions and search keywords from the selected Student Profile. You can edit them before validating.</p>
+      <div class="ps-grid" style="margin-top:16px">
+        <div class="ps-field"><label for="strategy_directions">Research Directions (one per line)</label><textarea class="ps-input ps-strategy-list" id="strategy_directions" rows="4"></textarea></div>
+        <div class="ps-field"><label for="strategy_keywords">Search Keywords (one per line)</label><textarea class="ps-input ps-strategy-list" id="strategy_keywords" rows="4"></textarea></div>
+        <div class="ps-field"><label for="strategy_disciplines">Related Disciplines (one per line)</label><textarea class="ps-input ps-strategy-list" id="strategy_disciplines" rows="3"></textarea></div>
+        <div class="ps-field"><label for="strategy_priorities">Matching Priorities (one per line)</label><textarea class="ps-input ps-strategy-list" id="strategy_priorities" rows="3"></textarea></div>
+      </div>
+      <div class="ps-field" style="margin-top:14px"><label for="strategy_cautions">Cautions / Missing Evidence</label><textarea class="ps-input" id="strategy_cautions" rows="2"></textarea></div>
+    </div>
+    <div class="ps-field" style="margin-top:18px">
+      <label for="research_direction">Research Direction Override (optional)</label>
+      <textarea class="ps-input" id="research_direction" name="research_direction" rows="3" placeholder="Leave blank to use the AI Search Strategy">{{ form.research_direction }}</textarea>
+    </div>
+    <h3 style="margin-top:28px">University Ranking</h3>
+    <p class="ps-hint" style="margin-top:-8px;margin-bottom:15px">Optional. Leave the source and range empty for no ranking restriction. The latest available rankings will be used when data integration is enabled.</p>
+    <div class="ps-grid">
+      <div class="ps-field">
+        <label for="ranking_source">Ranking Source</label>
+        <select class="ps-input" name="ranking_source" id="ranking_source">
+          <option value="">No ranking restriction</option>
+          <option value="QS" {% if form.ranking_source == 'QS' %}selected{% endif %}>QS World University Rankings</option>
+          <option value="THE" {% if form.ranking_source == 'THE' %}selected{% endif %}>Times Higher Education (THE)</option>
+          <option value="USNEWS" {% if form.ranking_source == 'USNEWS' %}selected{% endif %}>U.S. News Best Global Universities</option>
+        </select>
+      </div>
+      <div class="ps-field">
+        <label for="ranking_type">Ranking Type</label>
+        <select class="ps-input" name="ranking_type" id="ranking_type">
+          <option value="overall" {% if form.ranking_type == 'overall' %}selected{% endif %}>Overall</option>
+          <option value="subject" {% if form.ranking_type == 'subject' %}selected{% endif %}>By Subject</option>
+        </select>
+      </div>
+      <div class="ps-field" id="subjectField" {% if form.ranking_type != 'subject' %}hidden{% endif %}>
+        <label for="ranking_subject">Subject *</label>
+        <input class="ps-input" name="ranking_subject" id="ranking_subject" placeholder="e.g. Mechanical Engineering" value="{{ form.ranking_subject }}">
+      </div>
+      <div class="ps-field">
+        <label>Ranking Range</label>
+        <div class="ps-row" style="flex-wrap:nowrap">
+          <input class="ps-input" type="number" min="1" max="10000" name="ranking_min" id="ranking_min" placeholder="From (e.g. 20)" value="{{ form.ranking_min }}" aria-label="From Rank">
+          <span>–</span>
+          <input class="ps-input" type="number" min="1" max="10000" name="ranking_max" id="ranking_max" placeholder="To (e.g. 50)" value="{{ form.ranking_max }}" aria-label="To Rank">
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:20px">
+      <label class="ps-check"><input type="checkbox" name="official_only" {% if form.official_only %}checked{% endif %}> Search official university websites only</label>
+    </div>
+    <div class="ps-row" style="margin-top:22px">
+      <a class="ps-button" id="viewResultsLink" href="{{ url_for('professor_results_page') }}" style="text-decoration:none">View Professor Results</a>
+      <span class="ps-hint">Search settings are saved automatically to MySQL.</span>
+    </div>
+  </form>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function(){
+  const student = document.getElementById('student_id');
+  const viewResultsLink = document.getElementById('viewResultsLink');
+  function updateResultsLink(){viewResultsLink.href={{ url_for('professor_results_page')|tojson }}+(student.value?'?student_id='+encodeURIComponent(student.value):'');}
+  const preview = document.getElementById('profilePreview');
+  const profileStatus = document.getElementById('profileStatus');
+  const strategyStatus = document.getElementById('strategyStatus');
+  const strategyButton = document.getElementById('generateStrategyButton');
+  const saveStrategyButton = document.getElementById('saveStrategyButton');
+  const draftStatus = document.getElementById('draftStatus');
+  const strategyFields = {
+    research_directions: document.getElementById('strategy_directions'),
+    search_keywords: document.getElementById('strategy_keywords'),
+    related_disciplines: document.getElementById('strategy_disciplines'),
+    matching_priorities: document.getElementById('strategy_priorities'),
+    cautions: document.getElementById('strategy_cautions')
+  };
+  let profileReady = false;
+  let loadingSettings = false;
+  let autosaveTimer = null;
+  let saveQueue = Promise.resolve();
+  let settingsVersion = 0;
+  let activeStudentId = student.value;
+  let profileDraft = null, savedProfile = null, rawMode = false;
+  const profileFields = document.getElementById('profileFields');
+  const profileRaw = document.getElementById('profileRaw');
+  const saveStatus = document.getElementById('profileSaveStatus');
+  const rawButton = document.getElementById('profileRawButton');
+  function labelText(key){return String(key).replace(/_/g,' ').replace(/([a-z])([A-Z])/g,'$1 $2').replace(/\b\w/g,c=>c.toUpperCase());}
+  function actionButton(label, fn){const b=document.createElement('button');b.type='button';b.className='ps-button';b.textContent=label;b.addEventListener('click',fn);return b;}
+  function fieldEditor(key, value, setValue){
+    const box=document.createElement('div');box.className='ps-edit-field';
+    const label=document.createElement('label');label.textContent=labelText(key);box.appendChild(label);
+    if(Array.isArray(value)){
+      const items=document.createElement('div');box.appendChild(items);
+      function draw(){items.replaceChildren();value.forEach((item,i)=>{
+        const wrapper=document.createElement('div');wrapper.className='ps-array-item';
+        wrapper.appendChild(fieldEditor('Item '+(i+1),item,v=>{value[i]=v;setValue(value);}));
+        wrapper.appendChild(actionButton('Remove',()=>{value.splice(i,1);setValue(value);draw();}));items.appendChild(wrapper);
+      });}
+      draw();const sample=value[0];
+      box.appendChild(actionButton('+ Add Item',()=>{
+        const newItem=sample===undefined?'':Array.isArray(sample)?[]:sample&&typeof sample==='object'?Object.fromEntries(Object.keys(sample).map(k=>[k,''])):typeof sample==='number'?0:typeof sample==='boolean'?false:'';
+        value.push(newItem);setValue(value);draw();
+      }));
+    }else if(value!==null && typeof value==='object'){
+      for(const [k,v] of Object.entries(value))box.appendChild(fieldEditor(k,v,n=>{value[k]=n;setValue(value);}));
+      if(!Object.keys(value).length){const hint=document.createElement('span');hint.className='ps-hint';hint.textContent='Empty object: use Raw JSON to add fields.';box.appendChild(hint);}
+    }else if(typeof value==='boolean'){
+      const input=document.createElement('select');for(const b of [true,false]){const o=document.createElement('option');o.value=String(b);o.textContent=String(b);input.appendChild(o);}
+      input.value=String(value);input.addEventListener('change',()=>setValue(input.value==='true'));box.appendChild(input);
+    }else{
+      const v=value===null?'':String(value);const input=document.createElement(v.length>100||v.includes('\n')?'textarea':'input');
+      if(input.tagName==='INPUT')input.type=typeof value==='number'?'number':'text';input.value=v;
+      input.addEventListener('input',()=>{if(value===null)setValue(input.value===''?null:input.value);else if(typeof value==='number'){if(input.value!==''&&Number.isFinite(Number(input.value)))setValue(Number(input.value));}else setValue(input.value);});box.appendChild(input);
+    }return box;
+  }
+  function renderProfile(){profileFields.replaceChildren();for(const [key,val] of Object.entries(profileDraft||{}))profileFields.appendChild(fieldEditor(key,val,v=>{profileDraft[key]=v;}));}
+  function showVisual(){rawMode=false;profileFields.hidden=false;profileRaw.hidden=true;rawButton.textContent='Raw JSON';renderProfile();}
+  rawButton.addEventListener('click',()=>{
+    saveStatus.textContent='';
+    if(!rawMode){profileRaw.value=JSON.stringify(profileDraft,null,2);rawMode=true;profileFields.hidden=true;profileRaw.hidden=false;rawButton.textContent='Visual Editor';}
+    else{try{const value=JSON.parse(profileRaw.value);if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Profile must be a JSON object');profileDraft=value;showVisual();}catch(e){saveStatus.textContent='Invalid JSON: '+e.message;}}
+  });
+  document.getElementById('profileResetButton').addEventListener('click',()=>{if(!savedProfile)return;profileDraft=structuredClone(savedProfile);saveStatus.textContent='Unsaved edits discarded.';showVisual();});
+  document.getElementById('profileSaveButton').addEventListener('click',async()=>{
+    let value;
+    try{value=rawMode?JSON.parse(profileRaw.value):profileDraft;if(!value||typeof value!=='object'||Array.isArray(value)||!Object.keys(value).length)throw Error('Profile must be a nonempty JSON object');}
+    catch(e){saveStatus.textContent='Invalid profile: '+e.message;return;}
+    const button=document.getElementById('profileSaveButton');button.disabled=true;saveStatus.textContent='Saving...';
+    try{
+      const response=await fetch(`/analysis/${encodeURIComponent(student.value)}/profile/save`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({csrf_token: {{ analysis_csrf|tojson }},profile:value})});
+      const data=await response.json();if(!response.ok||!data.success)throw Error(data.message||'Save failed');
+      savedProfile=structuredClone(value);profileDraft=structuredClone(value);showVisual();saveStatus.textContent='Profile saved successfully.';
+      Object.values(strategyFields).forEach(el=>el.value='');strategyStatus.textContent='Profile updated. Generate Strategy again to use the latest profile.';
+    }catch(e){saveStatus.textContent=e.message;}finally{button.disabled=false;}
+  });
+  async function loadProfile(){
+    loadingSettings = true;
+    profileReady = false;
+    strategyButton.disabled = true;
+    saveStrategyButton.disabled = true;
+    updateResultsLink();
+    preview.hidden = true;
+    profileDraft=null;savedProfile=null;saveStatus.textContent="";
+    profileStatus.textContent = student.value ? 'Loading Student Profile...' : 'Select a student to load their existing AI Student Profile.';
+    Object.values(strategyFields).forEach(el=>el.value='');
+    draftStatus.textContent = student.value ? 'Loading saved search settings...' : 'Select a student to load a saved strategy.';
+    if(!student.value){loadingSettings=false;return;}
+    try {
+      const response = await fetch(`/professors/${encodeURIComponent(student.value)}/profile`);
+      const data = await response.json();
+      if(!response.ok || !data.success) throw Error(data.message || 'Profile unavailable');
+      savedProfile=structuredClone(data.profile);profileDraft=structuredClone(data.profile);showVisual();
+      preview.hidden = false;
+      profileStatus.textContent = 'Edit the saved Student Profile here, then save before generating a new search strategy.';
+      profileReady = true;
+      strategyButton.disabled = false;
+      saveStrategyButton.disabled = false;
+
+      await loadDraft();
+
+    } catch(error) {profileStatus.textContent = error.message;}
+    finally { loadingSettings=false; }
+  }
+   function collectPreferences(){
+     const f=document.getElementById('professorSearchForm');
+     const value=name=>f.elements.namedItem(name)?.value || '';
+     return {
+       location:value('location'), universities:value('universities'),
+       research_direction:value('research_direction'),
+       ranking_source:value('ranking_source'), ranking_type:value('ranking_type'),
+       ranking_subject:value('ranking_subject'), ranking_min:value('ranking_min'),
+       ranking_max:value('ranking_max'), professor_count:value('professor_count'),
+       official_only:!!f.elements.namedItem('official_only')?.checked
+     };
+   }
+   function applyPreferences(p){
+     const f=document.getElementById('professorSearchForm');
+     for(const [key,value] of Object.entries(p||{})){
+       const el=f.elements.namedItem(key);
+       if(!el || key==='student_id')continue;
+       if(el.type==='checkbox')el.checked=!!value;
+       else el.value=value == null?'':String(value);
+     }
+     document.getElementById('ranking_type').dispatchEvent(new Event('change'));
+   }
+   async function loadDraft(){
+     const id=student.value;
+     try{
+       const response=await fetch(`/professors/${encodeURIComponent(id)}/draft`);
+       const data=await response.json();
+       if(id!==student.value)return;
+       if(!response.ok || !data.success)throw Error(data.message||'Could not load draft');
+       if(!data.saved){draftStatus.textContent='No saved settings yet. Changes will be saved automatically.';return;}
+       applyPreferences(data.preferences);
+       for(const [key,el] of Object.entries(strategyFields))el.value=(data.strategy[key]||[]).join('\n');
+       draftStatus.textContent='Saved settings loaded from MySQL.';
+     }catch(error){draftStatus.textContent='Load failed: '+error.message;}
+   }
+   function validateSettings(){
+     const p=collectPreferences();
+     const count=Number(p.professor_count);
+     if(!Number.isInteger(count)||count<1||count>100)return 'Number of professors must be between 1 and 100.';
+     if((p.ranking_min||p.ranking_max)&&!p.ranking_source)return 'Choose a ranking source for the ranking range.';
+     if(p.ranking_source&&p.ranking_type==='subject'&&!p.ranking_subject.trim())return 'Enter a subject for subject rankings.';
+     for(const key of ['ranking_min','ranking_max']){
+       if(p[key] && (!/^\d+$/.test(p[key])||Number(p[key])<1||Number(p[key])>10000))return 'Ranking must be between 1 and 10000.';
+     }
+     if(p.ranking_min&&p.ranking_max&&Number(p.ranking_min)>Number(p.ranking_max))return 'From Rank cannot exceed To Rank.';
+     return '';
+   }
+   function saveSettings(id, preferences, strategy, version){
+     // Serialize writes to prevent older requests overwriting newer settings.
+     saveQueue=saveQueue.catch(()=>{}).then(async()=>{
+       const response=await fetch(`/professors/${encodeURIComponent(id)}/draft`,{
+         method:'POST',headers:{'Content-Type':'application/json'},
+         body:JSON.stringify({csrf_token: {{ csrf_token|tojson }},strategy,preferences})
+       });
+       const data=await response.json();
+       if(!response.ok||!data.success)throw Error(data.message||'Save failed');
+       if(id===student.value&&version===settingsVersion)draftStatus.textContent='All changes saved to MySQL.';
+       return data;
+     });
+     return saveQueue;
+   }
+   async function persistSettings(){
+     clearTimeout(autosaveTimer);
+     if(!profileReady||!student.value||loadingSettings)return;
+     const problem=validateSettings();
+     if(problem){draftStatus.textContent='Not saved: '+problem;return;}
+     const id=student.value;
+     const version=++settingsVersion;
+     draftStatus.textContent='Saving changes...';
+     saveStrategyButton.disabled=true;
+     try{await saveSettings(id,collectPreferences(),currentStrategy(),version);}
+     catch(error){if(id===student.value&&version===settingsVersion)draftStatus.textContent='Save failed: '+error.message;}
+     finally{saveStrategyButton.disabled=!profileReady;}
+   }
+   function scheduleSave(){
+     if(loadingSettings||!profileReady)return;
+     clearTimeout(autosaveTimer);
+     draftStatus.textContent='Unsaved changes...';
+     autosaveTimer=setTimeout(persistSettings,1000);
+   }
+   saveStrategyButton.addEventListener('click',persistSettings);
+   const searchForm=document.getElementById('professorSearchForm');
+   searchForm.addEventListener('input',scheduleSave);
+   searchForm.addEventListener('change',event=>{if(event.target!==student)scheduleSave();});
+   searchForm.addEventListener('submit',event=>event.preventDefault());
+   for(const el of Object.values(strategyFields))el.addEventListener('input',scheduleSave);
+   student.addEventListener('change',()=>{
+     clearTimeout(autosaveTimer);
+     if(activeStudentId && profileReady && !loadingSettings && !validateSettings()){
+       // Capture the previous student's form before the new student's settings load.
+       saveSettings(activeStudentId,collectPreferences(),currentStrategy(),++settingsVersion)
+         .catch(error=>console.error('Previous student settings save failed:',error));
+     }
+     activeStudentId=student.value;
+     settingsVersion++;
+   });
+   viewResultsLink.addEventListener('click',async event=>{
+     if(!student.value)return;
+     event.preventDefault();
+     await persistSettings();
+     if(draftStatus.textContent.startsWith('Save failed')||draftStatus.textContent.startsWith('Not saved'))return;
+     window.location.assign(viewResultsLink.href);
+   });
+  student.addEventListener('change',loadProfile);
+  student.addEventListener('change',updateResultsLink);
+  updateResultsLink();
+  loadProfile();
+  strategyButton.addEventListener('click',async()=>{
+    if(!profileReady) return;
+    strategyButton.disabled=true;
+    strategyStatus.textContent='Generating search strategy from the saved Student Profile...';
+    try {
+      const response=await fetch(`/professors/${encodeURIComponent(student.value)}/strategy`,{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({csrf_token: {{ csrf_token|tojson }} })
+      });
+      const data=await response.json();
+      if(!response.ok || !data.success) throw Error(data.message || 'Strategy generation failed');
+      Object.entries(strategyFields).forEach(([key,el])=>el.value=(data.strategy[key]||[]).join('\n'));
+      strategyStatus.textContent=`Strategy generated with ${data.model}. Review and edit; changes are saved automatically.`;
+      scheduleSave();
+    } catch(error) {strategyStatus.textContent=error.message;}
+    finally {strategyButton.disabled=!profileReady;}
+  });
+  function currentStrategy(){
+    const result={};
+    Object.entries(strategyFields).forEach(([key,el])=>result[key]=el.value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean));
+    return result;
+  }
+  const type = document.getElementById('ranking_type');
+  const source = document.getElementById('ranking_source');
+  const field = document.getElementById('subjectField');
+  const subject = document.getElementById('ranking_subject');
+  const min = document.getElementById('ranking_min');
+  const max = document.getElementById('ranking_max');
+  function update(){field.hidden = type.value !== 'subject';subject.required = type.value === 'subject';}
+  type.addEventListener('change',update);update();
+
+})();
+</script>
+{% endblock %}

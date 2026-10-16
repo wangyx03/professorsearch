@@ -1,0 +1,299 @@
+{% extends 'base.html' %}
+{% block title %}Analysis - ProfessorSearch{% endblock %}
+{% block page_title %}Analysis{% endblock %}
+{% block content %}
+<style>
+.an-panel{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:20px;margin-bottom:20px}
+.an-panel h3{margin:0 0 14px;font-size:17px}
+.an-control{padding:9px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:14px}
+.an-toolbar{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}
+.an-toolbar input{flex:1;min-width:220px}
+.an-table-wrap{overflow-x:auto}.an-table{width:100%;border-collapse:collapse;font-size:14px}
+.an-table th,.an-table td{padding:12px;border-bottom:1px solid #e5e7eb;text-align:left;vertical-align:middle}
+.an-table th{background:#f9fafb;cursor:pointer}.an-description{max-width:520px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.an-status{padding:4px 8px;background:#f3f4f6;border-radius:5px;font-size:12px;white-space:nowrap}
+.an-status.ready{background:#dbeafe;color:#1d4ed8}.an-status.running{background:#fef3c7;color:#92400e}.an-status.failed{background:#fee2e2;color:#991b1b}.an-status.completed{background:#dcfce7;color:#166534}.an-muted{color:#6b7280;font-size:13px}
+.an-btn{padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer}
+.an-btn.primary{background:#2563eb;color:#fff;border-color:#2563eb}.an-btn:disabled{opacity:.45;cursor:not-allowed}
+.an-actions{display:flex;gap:7px;flex-wrap:wrap}
+.an-modal{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px}
+.an-modal.open{display:flex}.an-dialog{background:#fff;border-radius:10px;padding:22px;width:min(680px,100%);max-height:85vh;overflow:auto}
+.an-dialog textarea{width:100%;min-height:240px;font-family:monospace;box-sizing:border-box}
+.an-dialog input[type=file]{display:block;margin:15px 0;width:100%}
+.an-dialog-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+.an-message{margin-top:10px;white-space:pre-wrap}.an-message.error{color:#b91c1c}.an-message.success{color:#166534}
+
+.an-dialog.profile-wide{width:min(1050px,96vw);max-height:92vh}
+.an-profile-tools{display:flex;gap:8px;align-items:center;margin:12px 0}
+.an-profile-fields{display:grid;gap:14px;max-height:62vh;overflow:auto;padding:4px}
+.an-field{border:1px solid #e5e7eb;border-radius:8px;padding:12px;min-width:0;background:#fff}
+.an-field>label{display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:7px;overflow-wrap:anywhere}
+.an-field>input,.an-field>textarea,.an-field>select{width:100%;box-sizing:border-box;border:1px solid #d1d5db;border-radius:6px;padding:9px;font:inherit}
+.an-field>textarea{min-height:75px;font-family:inherit;resize:vertical}
+.an-field .an-field{margin-top:10px;background:#fafbfc}
+.an-field-array{display:grid;gap:8px}
+.an-field-array-item{position:relative;border-left:3px solid #dbeafe;padding-left:8px}
+.an-field-actions{display:flex;gap:7px;margin-top:8px}
+.an-profile-raw{width:100%;box-sizing:border-box;min-height:50vh;font-family:monospace!important}
+</style>
+<div class="an-panel">
+ <h3>Student Selection</h3>
+ <select class="an-control" style="width:100%;max-width:460px" onchange="location.href=this.value?'/analysis?student_id='+encodeURIComponent(this.value):'/analysis'">
+  <option value="">Select a student...</option>
+  {% for student in students %}<option value="{{student.student_id}}" {% if selected_student_id == student.student_id %}selected{% endif %}>{{student.full_name}} (ID: {{student.student_id}})</option>{% endfor %}
+ </select>
+</div>
+{% if selected_student_id %}
+<div class="an-panel">
+ <h3>Module Analysis</h3>
+ <p class="an-muted">{{completed_count}} Completed / {{analysis_rows|length}} Modules</p>
+ <div class="an-actions" style="align-items:center;margin:12px 0">
+  <button type="button" class="an-btn primary" id="runAllButton" onclick="runAllAnalysis()" disabled>Run All Analysis (0)</button>
+  <button type="button" class="an-btn" id="clearFilesButton" onclick="clearPendingFiles()" disabled>Clear Files</button>
+  <span class="an-muted" id="batchProgress" role="status">Select documents for analysis.</span>
+ </div>
+ <div class="an-toolbar">
+  <input class="an-control" id="moduleSearch" placeholder="Search module name..." oninput="filterModules()">
+  <select class="an-control" id="statusFilter" onchange="filterModules()">
+   <option value="all">All Status</option><option value="completed">Completed</option><option value="not_analyzed">Not Analyzed</option>
+  </select>
+ </div>
+ <div class="an-table-wrap"><table class="an-table" id="moduleTable"><thead><tr>
+  <th onclick="sortModules(0)">Module Name</th><th>Description</th><th onclick="sortModules(2)">Status</th><th>Last Analyzed</th><th>Actions</th>
+ </tr></thead><tbody>
+ {% for m in analysis_rows %}
+ <tr data-module-id="{{m.module_id|e}}" data-search="{{(m.module_id ~ ' ' ~ m.module_name)|lower|e}}" data-status="{{m.status}}">
+  <td>{{m.module_name}}</td><td><div class="an-description" title="{{m.description|e}}">{{m.description}}</div></td>
+  <td><span class="an-status {{m.status}}">{{'Completed' if m.status == 'completed' else 'Not Analyzed'}}</span></td>
+  <td><span class="an-file-name">{{ m.analyzed_at | server_time }}</span></td>
+  <td><div class="an-actions">
+   <button class="an-btn an-upload-button" onclick='openUpload({{m.module_id|tojson}},{{m.module_name|tojson}},{{m.has_result|tojson}})'>Upload</button>
+   {% if m.has_result %}<button class="an-btn" onclick='viewResult({{m.module_id|tojson}},{{m.module_name|tojson}})'>View</button>{% endif %}
+  </div></td>
+ </tr>
+ {% endfor %}
+ </tbody></table></div><p class="an-muted" id="emptyRows" hidden>No matching modules.</p>
+</div>
+<div class="an-panel"><h3>Student Profile</h3>
+ <p class="an-muted" id="profileInfo">{% if profile and profile.profile_data %}Profile exists. Last updated: {{ profile.updated_at | server_time }}{% else %}No student profile has been generated yet.{% endif %}</p>
+ <div class="an-actions">
+  <button type="button" class="an-btn primary" id="generateProfileButton" onclick="generateProfile()" {% if completed_count == 0 %}disabled{% endif %}>{{ 'Regenerate Profile' if profile and profile.profile_data else 'Generate Profile' }}</button>
+  <button type="button" class="an-btn" id="editProfileButton" onclick="openProfileEditor()" {% if not profile or not profile.profile_data %}disabled{% endif %}>View Profile</button>
+ </div><div id="profileMessage" class="an-message" role="status"></div>
+</div>
+<div class="an-modal" id="profileModal"><div class="an-dialog profile-wide" role="dialog" aria-modal="true" aria-labelledby="profileTitle">
+ <h3 id="profileTitle">Student Profile — View</h3>
+ <p class="an-muted">This profile is read-only. Edit and save it from Professor Search.</p>
+ <div id="profileVisual" class="an-profile-fields"></div>
+ <div id="profileEditorMessage" class="an-message" role="status"></div>
+ <div class="an-dialog-actions"><button type="button" class="an-btn" onclick="closeModal('profileModal')">Close</button></div>
+</div></div>
+<div class="an-modal" id="uploadModal"><div class="an-dialog" role="dialog" aria-modal="true" aria-labelledby="uploadTitle">
+ <h3 id="uploadTitle">Upload Document</h3><p class="an-muted">PDF or DOCX, maximum 10 MB. The original document is not stored.</p>
+ <form id="uploadForm"><input type="hidden" name="csrf_token" value="{{csrf_token}}"><input type="hidden" name="module_id" id="uploadModuleId">
+  <input type="file" id="uploadFile" name="file" accept=".pdf,.docx" required>
+  <div id="uploadMessage" class="an-message" role="status"></div>
+  <div class="an-dialog-actions"><button class="an-btn" type="button" onclick="closeModal('uploadModal')">Cancel</button><button class="an-btn primary" id="addFileButton" type="submit">Add File</button></div>
+ </form>
+</div></div>
+<div class="an-modal" id="resultModal"><div class="an-dialog" role="dialog" aria-modal="true" aria-labelledby="resultTitle">
+ <h3 id="resultTitle">Module Result</h3><textarea id="resultText" readonly></textarea>
+ <div class="an-dialog-actions"><button class="an-btn" onclick="closeModal('resultModal')">Close</button></div>
+</div></div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+const studentId = {{selected_student_id|tojson}};
+const csrfToken = {{csrf_token|tojson}};
+const pendingFiles = new Map();
+let batchRunning = false;
+
+function rowFor(id) {
+ return [...document.querySelectorAll('#moduleTable tbody tr')]
+   .find(row => row.dataset.moduleId === id);
+}
+function setRowStatus(id, status, label) {
+ const row = rowFor(id);
+ if (!row) return;
+ row.dataset.status = status;
+ const badge = row.querySelector('.an-status');
+ badge.className = 'an-status ' + status;
+ badge.textContent = label;
+}
+function updateBatchControls() {
+ const count = pendingFiles.size;
+ document.getElementById('runAllButton').disabled = batchRunning || count === 0;
+ document.getElementById('runAllButton').textContent = `Run All Analysis (${count})`;
+ document.getElementById('clearFilesButton').disabled = batchRunning || count === 0;
+ document.querySelectorAll('.an-upload-button').forEach(btn => btn.disabled = batchRunning);
+}
+function filterModules() {
+ const q = document.getElementById('moduleSearch').value.trim().toLowerCase();
+ const s = document.getElementById('statusFilter').value;
+ let n = 0;
+ document.querySelectorAll('#moduleTable tbody tr').forEach(row => {
+   const show = row.dataset.search.includes(q) && (s === 'all' || row.dataset.status === s);
+   row.hidden = !show;
+   if (show) n++;
+ });
+ document.getElementById('emptyRows').hidden = n !== 0;
+}
+const directions = {};
+function sortModules(i) {
+ const body = document.querySelector('#moduleTable tbody');
+ const rows = [...body.rows];
+ directions[i] = !directions[i];
+ rows.sort((a,b) => {
+   const x=a.cells[i].textContent.trim(), y=b.cells[i].textContent.trim();
+   return (directions[i]?1:-1)*x.localeCompare(y,undefined,{numeric:true,sensitivity:'base'});
+ });
+ rows.forEach(row=>body.appendChild(row));
+}
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function openUpload(id, name, existing) {
+ if (batchRunning) return;
+ document.getElementById('uploadTitle').textContent = 'Add File: ' + name;
+ document.getElementById('uploadModuleId').value = id;
+ document.getElementById('uploadFile').value = '';
+ document.getElementById('uploadMessage').textContent = '';
+ document.getElementById('uploadModal').classList.add('open');
+}
+const uploadForm = document.getElementById('uploadForm');
+if (uploadForm) uploadForm.addEventListener('submit', event => {
+ event.preventDefault();
+ const id = document.getElementById('uploadModuleId').value;
+ const file = document.getElementById('uploadFile').files[0];
+ const message = document.getElementById('uploadMessage');
+ if (!file) { message.textContent='Choose a file.'; return; }
+ if (!/\.(pdf|docx)$/i.test(file.name)) { message.textContent='Only PDF or DOCX files are supported.'; return; }
+ if (file.size > 10 * 1024 * 1024) { message.textContent='File exceeds 10 MB.'; return; }
+ pendingFiles.set(id, file);
+ setRowStatus(id, 'ready', 'Ready');
+ rowFor(id).querySelector('.an-file-name').textContent = file.name;
+ document.getElementById('batchProgress').textContent = `${pendingFiles.size} file(s) ready. Files are held in this browser tab until analysis.`;
+ closeModal('uploadModal');
+ updateBatchControls();
+ filterModules();
+});
+function clearPendingFiles() {
+ if (batchRunning) return;
+ for (const id of pendingFiles.keys()) {
+   const row = rowFor(id);
+   const original = row.dataset.originalStatus || 'not_analyzed';
+   setRowStatus(id, original, original === 'completed' ? 'Completed' : 'Not Analyzed');
+   row.querySelector('.an-file-name').textContent = row.dataset.originalDate || '—';
+ }
+ pendingFiles.clear();
+ document.getElementById('batchProgress').textContent = 'File selection cleared.';
+ updateBatchControls(); filterModules();
+}
+async function runAllAnalysis() {
+ if (batchRunning || pendingFiles.size === 0) return;
+ batchRunning = true;
+ updateBatchControls();
+ const jobs = [...pendingFiles.entries()];
+ let completed = 0, failed = 0;
+ const progress = document.getElementById('batchProgress');
+ for (let i=0; i<jobs.length; i++) {
+   const [id,file] = jobs[i];
+   setRowStatus(id, 'running', 'Running');
+   progress.textContent = `Analyzing ${i+1}/${jobs.length}: ${file.name}`;
+   const data = new FormData();
+   data.append('csrf_token', csrfToken);
+   data.append('module_id', id);
+   data.append('file', file);
+   try {
+     const response = await fetch(`/analysis/${studentId}/run`, {method:'POST', body:data});
+     const payload = await response.json();
+     if (!response.ok || !payload.success) throw Error(payload.message || 'Analysis failed');
+     setRowStatus(id, 'completed', 'Completed');
+     pendingFiles.delete(id);
+     completed++;
+   } catch(error) {
+     setRowStatus(id, 'failed', 'Failed');
+     rowFor(id).querySelector('.an-file-name').title = error.message;
+     failed++;
+   }
+   filterModules();
+ }
+ batchRunning = false;
+ progress.textContent = `${completed} completed, ${failed} failed. ${failed ? 'Failed files remain selected; you can retry.' : 'All analyses saved.'}`;
+ updateBatchControls();
+ if (completed) {
+   // Refresh to show saved results and View buttons; failed files remain staged only until refresh.
+   if (!failed) window.location.reload();
+   else progress.textContent += ' Refresh after retrying to see the latest saved results.';
+ }
+}
+async function viewResult(id,name) {
+ document.getElementById('resultTitle').textContent = name;
+ document.getElementById('resultText').value = 'Loading...';
+ document.getElementById('resultModal').classList.add('open');
+ try {
+   const r=await fetch(`/analysis/${studentId}/module/${encodeURIComponent(id)}`);
+   const d=await r.json();
+   if (!r.ok) throw Error(d.message || 'Could not load result');
+   document.getElementById('resultText').value=JSON.stringify(d.result,null,2);
+ } catch(error) { document.getElementById('resultText').value=error.message; }
+}
+document.querySelectorAll('#moduleTable tbody tr').forEach(row => {
+ row.dataset.originalStatus = row.dataset.status;
+ row.dataset.originalDate = row.querySelector('.an-file-name').textContent;
+});
+
+async function generateProfile() {
+ const button = document.getElementById('generateProfileButton');
+ const message = document.getElementById('profileMessage');
+ if (button.disabled) return;
+ if (button.textContent.includes('Regenerate') && !confirm('Regenerate Profile? This will overwrite any manual edits to the current profile.')) return;
+ button.disabled = true;
+ const original = button.textContent;
+ button.textContent = 'Generating...';
+ message.className = 'an-message';
+ message.textContent = 'Generating profile from completed module analyses...';
+ try {
+  const response = await fetch(`/analysis/${studentId}/profile/generate`, {
+   method:'POST', headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({csrf_token:csrfToken})
+  });
+  const data = await response.json();
+  if (!response.ok || !data.success) throw Error(data.message || 'Profile generation failed');
+  message.className = 'an-message success';
+  message.textContent = 'Profile generated and saved successfully.';
+  document.getElementById('profileInfo').textContent = 'Profile exists. Just updated.';
+  document.getElementById('editProfileButton').disabled = false;
+  button.textContent = 'Regenerate Profile';
+ } catch(error) {
+  message.className = 'an-message error';
+  message.textContent = error.message;
+  button.textContent = original;
+ } finally { button.disabled = false; }
+}
+
+function readOnlyProfileField(key,value){
+ const box=document.createElement('div');box.className='an-field';
+ const title=document.createElement('label');title.textContent=String(key).replace(/_/g,' ').replace(/([a-z])([A-Z])/g,'$1 $2').replace(/\b\w/g,c=>c.toUpperCase());box.appendChild(title);
+ if(Array.isArray(value)){value.forEach((item,i)=>box.appendChild(readOnlyProfileField('Item '+(i+1),item)));}
+ else if(value!==null&&typeof value==='object'){for(const [k,v] of Object.entries(value))box.appendChild(readOnlyProfileField(k,v));}
+ else {const text=document.createElement('div');text.style.whiteSpace='pre-wrap';text.style.overflowWrap='anywhere';text.textContent=value===null?'—':String(value);box.appendChild(text);}
+ return box;
+}
+async function openProfileEditor(){
+ const message=document.getElementById('profileEditorMessage');
+ message.textContent='Loading profile...';message.className='an-message';
+ const root=document.getElementById('profileVisual');root.replaceChildren();
+ document.getElementById('profileModal').classList.add('open');
+ try{
+  const response=await fetch(`/analysis/${studentId}/profile`);const data=await response.json();
+  if(!response.ok||!data.success)throw Error(data.message||'Could not load profile');
+  for(const [key,value] of Object.entries(data.profile))root.appendChild(readOnlyProfileField(key,value));
+  message.textContent='';
+ }catch(e){message.className='an-message error';message.textContent=e.message;}
+}
+
+window.addEventListener('beforeunload', event => {
+ if (pendingFiles.size || batchRunning) { event.preventDefault(); event.returnValue=''; }
+});
+</script>
+{% endblock %}

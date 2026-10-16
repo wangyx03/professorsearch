@@ -1,0 +1,190 @@
+{% extends 'base.html' %}
+{% block title %}Professor Results - ProfessorSearch{% endblock %}
+{% block page_title %}Professor Results{% endblock %}
+{% block content %}
+<style>
+.ps-panel{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;margin-bottom:20px}
+.ps-panel h3{margin:0 0 16px;font-size:18px;color:#111827}
+.ps-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.ps-field{display:flex;flex-direction:column;gap:7px;min-width:0}
+.ps-field label{font-size:14px;font-weight:600;color:#374151}
+.ps-input{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #d1d5db;border-radius:7px;background:#fff;color:#111827;font:inherit}
+.ps-input:focus{outline:2px solid #bfdbfe;border-color:#2563eb}
+.ps-hint{font-size:12px;color:#6b7280}
+.ps-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.ps-check{display:flex;gap:9px;align-items:center;font-size:14px;color:#374151}
+.ps-button{border:0;border-radius:7px;background:#2563eb;color:#fff;padding:11px 20px;font-size:14px;cursor:pointer}
+.ps-error{color:#991b1b;background:#fef2f2;padding:12px;border-radius:7px;margin-bottom:12px}
+.ps-note{font-size:13px;color:#6b7280;margin-top:12px}
+.ps-alert{border:1px solid #fca5a5;background:#fef2f2;color:#991b1b;border-radius:9px;padding:16px;margin-top:16px}
+.ps-alert strong{display:block;margin-bottom:6px}
+.ps-alert p{margin:5px 0}
+.ps-success{border:1px solid #86efac;background:#f0fdf4;color:#166534;border-radius:9px;padding:14px;margin-top:16px}
+[hidden]{display:none!important}.ps-progress{display:flex;gap:10px;align-items:center;color:#1d4ed8;margin-top:15px}
+.ps-meter{width:100%;max-width:520px;height:9px;border-radius:8px;background:#dbeafe;overflow:hidden;margin:10px 0}.ps-meter-fill{height:100%;width:0;background:#2563eb;transition:width .3s}.ps-spinner{height:17px;width:17px;border:2px solid #bfdbfe;border-top-color:#2563eb;border-radius:50%;animation:ps-spin .8s linear infinite}
+@keyframes ps-spin{to{transform:rotate(360deg)}}
+.ps-old{font-size:13px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;padding:10px 12px;border-radius:7px;margin-bottom:12px}
+.ps-button:disabled{opacity:.5;cursor:not-allowed}.ps-strategy-list{width:100%;min-height:80px}.ps-profile-section{margin:12px 0}.ps-profile-section strong{display:block;margin-bottom:5px}.ps-preview{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px}
+@media(max-width:760px){.ps-grid{grid-template-columns:1fr}.ps-panel{padding:16px}}
+
+.ps-profile-editor{display:grid;gap:12px;margin-top:12px}
+.ps-edit-field{border:1px solid #e2e8f0;border-radius:8px;padding:12px;background:#fff;min-width:0}
+.ps-edit-field>label{display:block;font-weight:600;margin-bottom:7px;overflow-wrap:anywhere}
+.ps-edit-field>input,.ps-edit-field>textarea,.ps-edit-field>select{width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:6px;padding:9px;font:inherit}
+.ps-edit-field>textarea{min-height:75px;resize:vertical}
+.ps-edit-field .ps-edit-field{margin-top:9px;background:#fafafa}
+.ps-array-item{border-left:3px solid #bfdbfe;padding-left:9px;margin:10px 0}
+</style>
+<div class="ps-panel">
+  <h3>Professor Results</h3>
+  <div class="ps-grid">
+    <div class="ps-field"><label for="student_id">Student</label><select id="student_id" class="ps-input"><option value="">Select a student...</option>{% for s in students %}<option value="{{ s.student_id }}">{{ s.full_name }} (ID: {{ s.student_id }})</option>{% endfor %}</select></div>
+    <div class="ps-field"><label>Search Configuration</label><div class="ps-row"><a class="ps-button" id="configureLink" href="{{ url_for('professors') }}" style="text-decoration:none">Edit Strategy</a><span id="configStatus" class="ps-hint"></span></div></div>
+  </div>
+  <div class="ps-row" style="margin-top:20px"><button class="ps-button" id="findProfessorsButton" type="button" disabled>Research Professors</button><span class="ps-hint">Run a new search using the latest saved settings. Previous results are replaced only after a successful search.</span></div>
+  <div id="searchProgress" class="ps-progress" role="status" hidden><span class="ps-spinner" aria-hidden="true"></span><span id="progressText">Searching university rankings and faculty pages. Please wait...</span></div>
+  <div class="ps-meter" id="progressMeter" hidden><div id="progressMeterFill" class="ps-meter-fill"></div></div>
+  <div id="searchError" class="ps-alert" role="alert" hidden><strong>Professor Search Failed</strong><p id="errorMessage"></p><p>No new results were saved. Your previous professor list is preserved.</p></div>
+  <div id="searchSuccess" class="ps-success" role="status" hidden></div>
+  <p id="findStatus" class="ps-note" role="status">Select a student to load previous results.</p>
+</div>
+<div class="ps-panel"><h3 id="resultsHeading">Saved Professor Results</h3><div id="oldResultsNotice" class="ps-old" hidden>These are results from the last successful search, not the current attempt.</div><div id="professorResults"></div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function(){
+  const student=document.getElementById('student_id');
+  const findButton=document.getElementById('findProfessorsButton');
+  const findStatus=document.getElementById('findStatus');
+  const resultsBox=document.getElementById('professorResults');
+  const configStatus=document.getElementById('configStatus');
+  const configureLink=document.getElementById('configureLink');
+  const searchProgress=document.getElementById('searchProgress');
+  const searchError=document.getElementById('searchError');
+  const searchSuccess=document.getElementById('searchSuccess');
+  const errorMessage=document.getElementById('errorMessage');
+  const oldResultsNotice=document.getElementById('oldResultsNotice');
+  const resultsHeading=document.getElementById('resultsHeading');
+  let hasPreviousResults=false;
+  function resetNotices(){searchProgress.hidden=true;searchError.hidden=true;searchSuccess.hidden=true;oldResultsNotice.hidden=true;}
+  function explainError(message){const msg=String(message||'Unknown error');if(/invalid JSON|structured output|parse/i.test(msg))return 'The AI web search returned an invalid response format. Please retry. ('+msg+')';return msg;}
+  const initialId=new URLSearchParams(location.search).get('student_id');
+  if(initialId && [...student.options].some(o=>o.value===initialId))student.value=initialId;
+  let savedDraft=false;
+  function showResults(professors){
+    resultsBox.replaceChildren();
+    if(!professors.length){resultsBox.textContent='No saved professors.';return;}
+    for(const p of professors){
+      const card=document.createElement('div');card.className='ps-edit-field';card.style.marginBottom='12px';
+      const title=document.createElement('strong');title.textContent=`${p.name||'Unknown'} — ${p.university||'Unknown'} (${p.match_score??'N/A'}/100)`;card.appendChild(title);
+      for(const value of [p.department,(p.research_areas||[]).join(', '),'Match: '+(p.match_reasons||[]).join('; '),'Limitations: '+(p.limitations||[]).join('; ')]){
+        if(!value)continue;const line=document.createElement('p');line.textContent=value;card.appendChild(line);
+      }
+      if(p.faculty_url){const a=document.createElement('a');a.href=p.faculty_url;a.textContent='Official faculty page';a.target='_blank';a.rel='noopener noreferrer';card.appendChild(a);}
+      if(p.email){const email=document.createElement('p');email.textContent='Email: '+p.email;card.appendChild(email);}
+      if(p.discovery_stage){const stage=document.createElement('p');stage.className='ps-hint';stage.textContent='Discovery stage: '+({strict:'Strict criteria',location_relaxed:'Location relaxed',ranking_relaxed:'Ranking relaxed'}[p.discovery_stage]||p.discovery_stage);card.appendChild(stage);}
+      resultsBox.appendChild(card);
+    }
+  }
+  const progressText=document.getElementById('progressText');
+  const progressMeter=document.getElementById('progressMeter');
+  const progressMeterFill=document.getElementById('progressMeterFill');
+  let watchVersion=0;
+  const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+  async function getJSON(url, options){
+    const response=await fetch(url,options);
+    const data=await response.json();
+    if(!response.ok||!data.success)throw Error(data.message||`HTTP ${response.status}`);
+    return data;
+  }
+  function displayProgress(job){
+    resetNotices();searchProgress.hidden=false;progressMeter.hidden=false;
+    progressMeterFill.style.width=`${Math.max(0,Math.min(100,Number(job.progress)||0))}%`;
+    progressText.textContent=job.message||'Researching professors...';
+    findStatus.textContent='Background task running. You can leave this page and return later.';
+    findButton.disabled=true;
+  }
+  async function refreshSavedResults(id){
+    const r=await getJSON(`/professors/${encodeURIComponent(id)}/results`);
+    if(id!==student.value)return;
+    hasPreviousResults=Array.isArray(r.professors)&&r.professors.length>0;
+    showResults(r.professors||[]);
+    findStatus.textContent=r.saved?'Last successful search: '+(r.completed_at||'date unavailable'):'No saved professor results yet.';
+  }
+  async function watchJob(id, jobId, version){
+    while(version===watchVersion && id===student.value){
+      let job;
+      try{
+        const data=await getJSON(`/professors/${encodeURIComponent(id)}/find/status/${encodeURIComponent(jobId)}`);
+        job=data.job;
+      }catch(e){
+        if(version!==watchVersion)return;
+        searchProgress.hidden=true;progressMeter.hidden=true;
+        searchError.hidden=false;errorMessage.textContent='Could not read task status: '+e.message;
+        findButton.disabled=!savedDraft;return;
+      }
+      if(version!==watchVersion || id!==student.value)return;
+      if(job.state==='completed'){
+        searchProgress.hidden=true;progressMeter.hidden=true;
+        try{await refreshSavedResults(id);}catch(e){searchError.hidden=false;errorMessage.textContent='Search completed, but results could not be loaded: '+e.message;}
+        resultsHeading.textContent='Latest Professor Results';oldResultsNotice.hidden=true;
+        searchSuccess.textContent=job.message||'Search completed and saved.';searchSuccess.hidden=false;
+        findButton.disabled=!savedDraft;return;
+      }
+      if(job.state==='failed'){
+        searchProgress.hidden=true;progressMeter.hidden=true;
+        searchError.hidden=false;errorMessage.textContent=explainError(job.error||job.message);
+        oldResultsNotice.hidden=!hasPreviousResults;
+        resultsHeading.textContent=hasPreviousResults?'Previous Search Results':'Saved Professor Results';
+        findStatus.textContent='Search failed. The previous professor list is unchanged.';
+        findButton.disabled=!savedDraft;return;
+      }
+      displayProgress(job);
+      await sleep(2000);
+    }
+  }
+  async function loadStudent(){
+    const id=student.value;const version=++watchVersion;
+    savedDraft=false;hasPreviousResults=false;findButton.disabled=true;
+    resultsBox.replaceChildren();resetNotices();progressMeter.hidden=true;
+    resultsHeading.textContent='Saved Professor Results';
+    configureLink.href={{ url_for('professors')|tojson }}+(id?'?student_id='+encodeURIComponent(id):'');
+    if(!id){configStatus.textContent='';findStatus.textContent='Select a student.';return;}
+    configStatus.textContent='Loading saved strategy...';findStatus.textContent='Loading saved results...';
+    try{
+      const [d,r,active]=await Promise.all([
+        getJSON(`/professors/${encodeURIComponent(id)}/draft`),
+        getJSON(`/professors/${encodeURIComponent(id)}/results`),
+        getJSON(`/professors/${encodeURIComponent(id)}/find/active`)
+      ]);
+      if(version!==watchVersion)return;
+      savedDraft=!!d.saved;findButton.disabled=!savedDraft;
+      configStatus.textContent=savedDraft?'Saved strategy ready.':'No saved strategy. Save it on Professor Search first.';
+      hasPreviousResults=Array.isArray(r.professors)&&r.professors.length>0;
+      showResults(r.professors||[]);
+      findStatus.textContent=r.saved?'Previous successful search: '+(r.completed_at||'date unavailable'):'No saved professor results yet.';
+      if(active.job){displayProgress(active.job);watchJob(id,active.job.job_id,version);}
+    }catch(e){if(version===watchVersion){searchError.hidden=false;errorMessage.textContent='Could not load saved data: '+e.message;findStatus.textContent='Loading failed.';}}
+  }
+  student.addEventListener('change',loadStudent);
+  findButton.addEventListener('click',async()=>{
+    const id=student.value;if(!id||!savedDraft)return;
+    if(!confirm('Research professors using the latest saved settings? Successful results will replace the previous list.'))return;
+    const version=++watchVersion;
+    findButton.disabled=true;resetNotices();progressMeter.hidden=false;searchProgress.hidden=false;
+    progressText.textContent='Starting background search...';progressMeterFill.style.width='2%';
+    findStatus.textContent='Submitting search task...';
+    try{
+      const data=await getJSON(`/professors/${encodeURIComponent(id)}/find`,{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({csrf_token: {{ csrf_token|tojson }}})
+      });
+      if(version!==watchVersion)return;
+      displayProgress(data.job);
+      watchJob(id,data.job.job_id,version);
+    }catch(e){if(version===watchVersion){searchProgress.hidden=true;progressMeter.hidden=true;searchError.hidden=false;errorMessage.textContent=explainError(e.message);findButton.disabled=!savedDraft;}}
+  });
+  loadStudent();
+})();
+</script>
+{% endblock %}
